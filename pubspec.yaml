@@ -1,0 +1,27 @@
+name: falcon_gcs
+description: "A new Flutter project."
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ^3.6.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  path_provider: ^2.1.5
+  google_maps_flutter: ^2.2.2
+  syncfusion_flutter_gauges: ^21.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/navbar.png
+    - assets/images/logo.png
