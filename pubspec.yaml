@@ -13,6 +13,7 @@ dependencies:
   path_provider: ^2.1.5
   google_maps_flutter: ^2.2.2
   syncfusion_flutter_gauges: ^21.2.3
+  camera: ^0.11.1
 
 dev_dependencies:
   flutter_test:
@@ -23,5 +24,4 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/navbar.png
     - assets/images/logo.png
