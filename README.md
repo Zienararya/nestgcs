@@ -1,6 +1,6 @@
-# FALCON GCS
+# CorvusGCS
 
- Flight Autonomous Link and Control Operations Network Ground Control Station
+ a Cross-platform UAV control system
 
  ## HOW TO RUN
 ```
