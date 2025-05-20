@@ -1,9 +1,12 @@
 import 'package:camera/camera.dart';
+// import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:falcon_gcs/component/alert.dart';
 import 'package:falcon_gcs/component/navbar.dart';
+import 'package:falcon_gcs/component/altimeter.dart';
 
 class Homepage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -13,18 +16,32 @@ class Homepage extends StatefulWidget {
   State<Homepage> createState() => _HomepageState();
 }
 
+// extension IntToString on int {
+//   String toHex() => '0x${toRadixString(16)}';
+//   String toPadded([int width = 3]) => toString().padLeft(width, '0');
+//   String toTransport() {
+//     switch (this) {
+//       case SerialPortTransport.usb:
+//         return 'USB';
+//       case SerialPortTransport.bluetooth:
+//         return 'Bluetooth';
+//       case SerialPortTransport.native:
+//         return 'Native';
+//       default:
+//         return 'Unknown';
+//     }
+//   }
+// }
+
 class _HomepageState extends State<Homepage> {
+  double speed = 50.0; // Simulasi speedometer (km/h)
+  double altitude = 5.0; // Simulasi altimeter (meter)
+  double heading = 0.0; // Heading dari kompas
   late GoogleMapController mapController;
   late CameraController _cameraController;
   Future<void>? _initializeControllerFuture;
   final LatLng _center = const LatLng(-7.276716204463224, 112.79310750593704);
-  static const List<String> connection = <String>[
-    'PORT',
-    'AUTO',
-    'COM8',
-    'UDP',
-    'TCP'
-  ];
+  var connection = ['PORT', 'AUTO', 'COM8', 'UDP', 'TCP'];
   static const List<String> flightmode = <String>['Stabilize', 'Auto', 'RTL'];
   static const List<String> baudrate = <String>[
     'BAUDRATE',
@@ -41,7 +58,7 @@ class _HomepageState extends State<Homepage> {
     '128000',
     '256000'
   ];
-  static String connectionValue = connection.first;
+  static String connectionValue = 'PORT';
   static String flightmodeValue = flightmode.first;
   static String baudrateValue = baudrate.first;
   bool? isArming;
@@ -50,12 +67,26 @@ class _HomepageState extends State<Homepage> {
   String alertTitle = "";
   String alertDescription = "";
 
+  // init function(function run when apps started)
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+    // initPorts();
+    // Update kompas secara real-time
+    FlutterCompass.events!.listen((event) {
+      setState(() {
+        heading = event.heading ?? 0.0;
+      });
+    });
   }
 
+// Port list function
+  // void initPorts() {
+  //   setState(() => connection = SerialPort.availablePorts);
+  // }
+
+// Camera Function
   void _initializeCamera() {
     if (widget.cameras.isNotEmpty) {
       _cameraController = CameraController(
@@ -68,12 +99,14 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+// turn off camera
   @override
   void dispose() {
     _cameraController.dispose();
     super.dispose();
   }
 
+// Arming/disarm button function
   void _toggleArming() {
     setState(() {
       isArming = !(isArming ?? false);
@@ -91,6 +124,7 @@ class _HomepageState extends State<Homepage> {
     });
   }
 
+// Hide alert function
   void _hideAlert() {
     setState(() {
       showAlert = false;
@@ -98,10 +132,12 @@ class _HomepageState extends State<Homepage> {
     });
   }
 
+// Zoom in button maps function
   void _zoomIn() {
     mapController.animateCamera(CameraUpdate.zoomIn());
   }
 
+// Zoom out button maps function
   void _zoomOut() {
     mapController.animateCamera(CameraUpdate.zoomOut());
   }
@@ -112,7 +148,7 @@ class _HomepageState extends State<Homepage> {
       body: Stack(
         children: [
           GoogleMap(
-            mapType: MapType.hybrid,
+            mapType: MapType.satellite,
             initialCameraPosition: CameraPosition(
               target: _center,
               zoom: 15.0,
@@ -122,13 +158,13 @@ class _HomepageState extends State<Homepage> {
             },
             markers: {
               Marker(
-                markerId: MarkerId("vehicle1"),
-                position: _center,
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueGreen),
-              ),
+                  markerId: MarkerId("vehicle1"),
+                  position: _center,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueAzure)),
             },
             zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
           ),
           Positioned(
             top: 0,
@@ -163,11 +199,21 @@ class _HomepageState extends State<Homepage> {
           Positioned(
             bottom: 20,
             right: 20,
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _buildSpeedometer(),
-                SizedBox(width: 20),
-                _buildAltitudeMeter(),
+                _compas(),
+                SizedBox(
+                  height: 20,
+                ),
+                Row(
+                  children: [
+                    _speedometer(),
+                    SizedBox(width: 20),
+                    _altitudeMeter(),
+                    SizedBox(width: 20),
+                  ],
+                ),
               ],
             ),
           ),
@@ -186,6 +232,7 @@ class _HomepageState extends State<Homepage> {
             left: 37,
             bottom: 22,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ClipOval(
                     child: Container(
@@ -318,31 +365,91 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  Widget _buildSpeedometer() {
+  Widget _speedometer() {
     return SizedBox(
-      width: 100,
-      height: 100,
-      child: SfRadialGauge(
-        axes: <RadialAxis>[
-          RadialAxis(minimum: 0, maximum: 100, pointers: [
-            NeedlePointer(value: 40),
-          ])
-        ],
+        width: 150,
+        height: 150,
+        child: ClipOval(
+            child: SfRadialGauge(
+          enableLoadingAnimation: true,
+          backgroundColor: Colors.white,
+          axes: [
+            RadialAxis(
+              minimum: 0,
+              maximum: 220,
+              pointers: [
+                NeedlePointer(
+                  value: 60,
+                  needleColor: Colors.red,
+                  needleLength: 1,
+                ),
+              ],
+              annotations: [
+                GaugeAnnotation(
+                  widget: Text(
+                    '60',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  angle: 90,
+                  positionFactor: 0.5,
+                )
+              ],
+            )
+          ],
+        )));
+  }
+
+  Widget _compas() {
+    return ClipOval(
+      child: Container(
+        width: 100,
+        height: 100,
+        color: Colors.white,
+        child: SizedBox(
+            child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Image.asset(
+              'assets/images/compass.png',
+              fit: BoxFit.cover,
+            ),
+            Transform.rotate(
+              angle: (heading) * (3.141592653589793 / 180),
+              child: Image.asset(
+                'assets/images/needle.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+          ],
+        )),
       ),
     );
   }
 
-  Widget _buildAltitudeMeter() {
-    return SizedBox(
-      width: 100,
-      height: 100,
-      child: SfRadialGauge(
-        axes: <RadialAxis>[
-          RadialAxis(minimum: 0, maximum: 500, pointers: [
-            NeedlePointer(value: 120),
-          ])
-        ],
-      ),
-    );
+  Widget _altitudeMeter() {
+    return Container(
+        height: 150,
+        padding: EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(255),
+          color: Colors.black87,
+        ),
+        child: Row(
+          children: [
+            // Altimeter Layer
+            CustomPaint(
+              size: Size(150, 100),
+              painter: AltimeterPainter(altitude: 5),
+            ),
+            SizedBox(
+              width: 3,
+            ),
+            // Attitude Indicator Layer
+            CustomPaint(
+              size: Size(120, 120),
+              painter: AttitudeIndicatorPainter(roll: 15, pitch: 5),
+            ),
+          ],
+        ));
   }
 }
