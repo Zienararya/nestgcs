@@ -124,15 +124,15 @@ class Navbar extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: null,
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.white),
+                    backgroundColor: Colors.white,
+                  ),
                   child: Row(
                     children: [
                       Text(
                         connectionValue,
-                        style: TextStyle(color: Colors.black),
+                        style: TextStyle(color: Colors.white),
                       ),
-                      Icon(Icons.arrow_drop_down, color: Colors.black),
+                      Icon(Icons.arrow_drop_down, color: Colors.white),
                     ],
                   ),
                 ),
@@ -158,9 +158,9 @@ class Navbar extends StatelessWidget {
                     children: [
                       Text(
                         baudrateValue,
-                        style: TextStyle(color: Colors.black),
+                        style: TextStyle(color: Colors.white),
                       ),
-                      Icon(Icons.arrow_drop_down, color: Colors.black),
+                      Icon(Icons.arrow_drop_down, color: Colors.white),
                     ],
                   ),
                 ),
