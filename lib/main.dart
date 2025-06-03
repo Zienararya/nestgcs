@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
-import 'views/homepage.dart';
+import 'presentation/views/homepage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

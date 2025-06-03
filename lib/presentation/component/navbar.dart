@@ -13,6 +13,7 @@ class Navbar extends StatelessWidget {
   final ValueChanged<String?> onFlightmodeChanged;
   final bool isArming;
   final VoidCallback onToggleArming;
+  final VoidCallback onConnect;
 
   const Navbar({
     super.key,
@@ -27,6 +28,7 @@ class Navbar extends StatelessWidget {
     required this.onFlightmodeChanged,
     required this.isArming,
     required this.onToggleArming,
+    required this.onConnect,
   });
 
   @override
@@ -167,7 +169,7 @@ class Navbar extends StatelessWidget {
               ),
               SizedBox(width: 7),
               ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: onConnect,
                   icon: Icon(Icons.link_rounded, color: Colors.black),
                   label: Text("CONNECT", style: TextStyle(color: Colors.black)),
                   style: ButtonStyle(
