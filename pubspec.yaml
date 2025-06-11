@@ -21,6 +21,7 @@ dependencies:
   serial: ^0.0.7+1
   socket_io_client: ^3.1.2
   provider: ^6.1.5
+  arcgis_map_sdk: ^0.8.0
 
 dev_dependencies:
   flutter_test:

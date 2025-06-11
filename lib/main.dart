@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'presentation/views/homepage.dart';
+import 'data/controllers/mavlink_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -10,7 +12,12 @@ void main() async {
     DeviceOrientation.landscapeLeft,
     DeviceOrientation.landscapeRight,
   ]).then((_) {
-    runApp(MainApp(cameras: cameras));
+    runApp(
+      ChangeNotifierProvider(
+        create: (_) => MavlinkController(),
+        child: MainApp(cameras: cameras),
+      ),
+    );
   });
 }
 
