@@ -2,32 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class Navbar extends StatelessWidget {
-  final String connectionValue;
-  final List<String> connection;
-  final ValueChanged<String?> onConnectionChanged;
   final String flightmodeValue;
-  final String baudrateValue;
-  final List<String> baudrate;
-  final ValueChanged<String?> onBaudrateChanged;
   final List<String> flightmode;
   final ValueChanged<String?> onFlightmodeChanged;
+  final TextEditingController ipAddress;
+  final VoidCallback onConnect;
   final bool isArming;
   final VoidCallback onToggleArming;
+  final VoidCallback onDataPressed;
+  final int? batteryRemaining;
+  final int? dropRate;
+  final bool connected;
 
-  const Navbar({
-    super.key,
-    required this.connectionValue,
-    required this.connection,
-    required this.onConnectionChanged,
-    required this.baudrateValue,
-    required this.baudrate,
-    required this.onBaudrateChanged,
-    required this.flightmodeValue,
-    required this.flightmode,
-    required this.onFlightmodeChanged,
-    required this.isArming,
-    required this.onToggleArming,
-  });
+  const Navbar(
+      {super.key,
+      required this.flightmodeValue,
+      required this.flightmode,
+      required this.onFlightmodeChanged,
+      required this.ipAddress,
+      required this.onConnect,
+      required this.isArming,
+      required this.onToggleArming,
+      required this.batteryRemaining,
+      required this.dropRate,
+      required this.connected,
+      required this.onDataPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +45,7 @@ class Navbar extends StatelessWidget {
                       textStyle: TextStyle(color: Colors.white, fontSize: 20))),
               SizedBox(width: 29),
               ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: onDataPressed,
                 icon: Icon(Icons.assignment_add, color: Colors.black),
                 label: Text("Data", style: TextStyle(color: Colors.black)),
                 style: ElevatedButton.styleFrom(
@@ -69,7 +68,9 @@ class Navbar extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: () {},
                 icon: Icon(Icons.wifi, color: Colors.black),
-                label: Text("N/A", style: TextStyle(color: Colors.black)),
+                label: Text(
+                    dropRate != null && dropRate != -1 ? "$dropRate%" : "N/A",
+                    style: TextStyle(color: Colors.black)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                 ),
@@ -79,7 +80,11 @@ class Navbar extends StatelessWidget {
                   onPressed: () {},
                   icon:
                       Icon(Icons.battery_unknown_rounded, color: Colors.black),
-                  label: Text("N/A", style: TextStyle(color: Colors.black)),
+                  label: Text(
+                      batteryRemaining != null && batteryRemaining != -1
+                          ? "$batteryRemaining%"
+                          : "N/A",
+                      style: TextStyle(color: Colors.black)),
                   style: ButtonStyle(
                       backgroundColor: WidgetStateProperty.all(Colors.white))),
               SizedBox(width: 7),
@@ -110,66 +115,27 @@ class Navbar extends StatelessWidget {
           ),
           Row(
             children: [
-              PopupMenuButton<String>(
-                color: Colors.white,
-                onSelected: onConnectionChanged,
-                itemBuilder: (BuildContext context) {
-                  return connection.map((String value) {
-                    return PopupMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList();
-                },
-                child: ElevatedButton(
-                  onPressed: null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
+              SizedBox(
+                width: 150,
+                child: TextField(
+                  controller: ipAddress,
+                  decoration: InputDecoration(
+                    hintText: 'IP Address',
+                    fillColor: Colors.white,
+                    filled: true,
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   ),
-                  child: Row(
-                    children: [
-                      Text(
-                        connectionValue,
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      Icon(Icons.arrow_drop_down, color: Colors.white),
-                    ],
-                  ),
+                  style: TextStyle(fontSize: 14),
                 ),
               ),
-              SizedBox(width: 7),
-              PopupMenuButton<String>(
-                color: Colors.white,
-                onSelected: onBaudrateChanged,
-                itemBuilder: (BuildContext context) {
-                  return baudrate.map((String value) {
-                    return PopupMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList();
-                },
-                child: ElevatedButton(
-                  onPressed: null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        baudrateValue,
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      Icon(Icons.arrow_drop_down, color: Colors.white),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(width: 7),
+              SizedBox(width: 10),
               ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: onConnect,
                   icon: Icon(Icons.link_rounded, color: Colors.black),
-                  label: Text("CONNECT", style: TextStyle(color: Colors.black)),
+                  label: Text(connected ? "DISCONNECT" : "CONNECT",
+                      style: TextStyle(color: Colors.black)),
                   style: ButtonStyle(
                       backgroundColor: WidgetStateProperty.all(Colors.white))),
               SizedBox(width: 28),
