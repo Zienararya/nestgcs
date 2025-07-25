@@ -7,7 +7,10 @@ class MavlinkController extends ChangeNotifier {
   List<MavlinkMessage> get messages => _messages;
 
   void addMessage(MavlinkMessage message) {
-    _messages.insert(0, message);
+    // Hapus pesan lama dengan tipe yang sama
+    _messages.removeWhere((msg) => msg.type == message.type);
+    // Tambahkan pesan baru ke akhir list
+    _messages.add(message);
     notifyListeners();
   }
 
