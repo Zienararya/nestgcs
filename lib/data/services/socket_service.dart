@@ -13,10 +13,14 @@ class SocketService {
     void Function(String error)? onError,
   }) {
     final uri = 'http://$backendIP:5000';
-    _socket = io.io(uri, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-    });
+    _socket = io.io(
+      uri,
+      io.OptionBuilder()
+          .setTransports(['polling'])
+          .setPath('/socket.io/')
+          .disableAutoConnect()
+          .build(),
+    );
 
     _socket!.on('connect', (_) {
       _isConnected = true;
@@ -36,12 +40,10 @@ class SocketService {
     _socket!.on('mavlink_data', (data) {
       final message = MavlinkMessage.fromJson(Map<String, dynamic>.from(data));
       controller.addMessage(message);
-      print('Received from backend: $data');
+      // print('Received from backend: $data');
     });
 
-    _socket!.onAny((event, data) {
-      print('Socket event: $event, data: $data');
-    });
+    _socket!.onAny((event, data) {});
 
     _socket!.on('disconnect', (_) {
       _isConnected = false;

@@ -5,7 +5,6 @@ import 'package:falcon_gcs/data/controllers/mavlink_controller.dart';
 import 'package:falcon_gcs/data/services/socket_service.dart';
 import 'package:arcgis_map_sdk/arcgis_map_sdk.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
-import 'package:flutter_compass/flutter_compass.dart';
 import 'package:falcon_gcs/presentation/component/alert.dart';
 import 'package:falcon_gcs/presentation/component/navbar.dart';
 import 'package:falcon_gcs/presentation/component/altimeter.dart';
@@ -19,10 +18,13 @@ class Homepage extends StatefulWidget {
   State<Homepage> createState() => _HomepageState();
 }
 
+// ======================
+//  Homepage State Class
+// ======================
 class _HomepageState extends State<Homepage> {
-  double speed = 50.0; // Simulasi speedometer (km/h)
-  double altitude = 5.0; // Simulasi altimeter (meter)
-  double heading = 0.0; // Heading dari kompas
+  // ======================
+  //  State Variables
+  // ======================
   ArcgisMapController? mapController;
   late CameraController _cameraController;
   Future<void>? _initializeControllerFuture;
@@ -41,21 +43,27 @@ class _HomepageState extends State<Homepage> {
   bool isConnected = false;
   bool showInfoPanel = false;
 
+  // ======================
+  //  Lifecycle Methods
+  // ======================
   // init function(function run when apps started)
   @override
   void initState() {
     super.initState();
     _initializeCamera();
     socketService = SocketService();
-    // Update kompas secara real-time
-    FlutterCompass.events!.listen((event) {
-      setState(() {
-        heading = event.heading ?? 0.0;
-      });
-    });
   }
 
-// Camera Function
+// turn off camera
+  @override
+  void dispose() {
+    _cameraController.dispose();
+    super.dispose();
+  }
+
+  // ======================
+  //  Camera Functions
+  // ======================
   void _initializeCamera() {
     if (widget.cameras.isNotEmpty) {
       _cameraController = CameraController(
@@ -68,6 +76,9 @@ class _HomepageState extends State<Homepage> {
     }
   }
 
+  // ======================
+  //  UI Toggle Functions
+  // ======================
   void toggleInfoPanel() {
     setState(() {
       showInfoPanel = !showInfoPanel;
@@ -75,12 +86,14 @@ class _HomepageState extends State<Homepage> {
     });
   }
 
+  // ======================
+  //  Backend Connection
+  // ======================
   void connectToBackend() {
     final controller = Provider.of<MavlinkController>(context, listen: false);
     final ip = ipAddress.text.trim();
 
     if (isConnected) {
-      SocketService socketService = SocketService();
       socketService.dispose();
       setState(() {
         isConnected = false;
@@ -101,16 +114,19 @@ class _HomepageState extends State<Homepage> {
       });
       return;
     }
-    SocketService socketService = SocketService();
-    socketService.initSocket(controller, backendIP: ip, onError: (error) {
-      setState(() {
-        alertColor = Colors.red;
-        alertTitle = "Connection Failed";
-        alertDescription = error;
-        showAlert = true;
-        isConnected = false;
-      });
-    });
+    socketService.initSocket(
+      controller,
+      backendIP: ip,
+      onError: (error) {
+        setState(() {
+          alertColor = Colors.red;
+          alertTitle = "Connection Failed";
+          alertDescription = error;
+          showAlert = true;
+          isConnected = false;
+        });
+      },
+    );
     setState(() {
       alertColor = Colors.green;
       alertTitle = "Connecting";
@@ -120,14 +136,9 @@ class _HomepageState extends State<Homepage> {
     });
   }
 
-// turn off camera
-  @override
-  void dispose() {
-    _cameraController.dispose();
-    super.dispose();
-  }
-
-// Arming/disarm button function
+  // ======================
+  //  Arming/Disarm Button
+  // ======================
   void _toggleArming() {
     setState(() {
       isArming = !(isArming ?? false);
@@ -145,7 +156,9 @@ class _HomepageState extends State<Homepage> {
     });
   }
 
-// Hide alert function
+  // ======================
+  //  Alert Functions
+  // ======================
   void _hideAlert() {
     setState(() {
       showAlert = false;
@@ -153,44 +166,45 @@ class _HomepageState extends State<Homepage> {
     });
   }
 
-// Zoom in button maps function
+  // ======================
+  //  Map Zoom Functions
+  // ======================
   void _zoomIn() {
     mapController?.zoomIn(lodFactor: 5);
   }
 
-// Zoom out button maps function
   void _zoomOut() {
     mapController?.zoomOut(lodFactor: 5);
   }
 
+  // ======================
+  //  Build Method
+  // ======================
   @override
   Widget build(BuildContext context) {
     // 1. Extract battery data at the top of build:
     final mavlinkController = Provider.of<MavlinkController>(context);
     final messages = mavlinkController.messages;
 
-    final sysStatusMsg = messages.firstWhere(
+    // Ambil pesan terbaru dari masing-masing tipe MAVLink
+    final sysStatusMsg = messages.lastWhere(
       (msg) => msg.type == 'SYS_STATUS',
       orElse: () => MavlinkMessage(type: 'SYS_STATUS', data: {}),
     );
-
-    // Extract latest MAVLink messages for info panel
-    final globalPosMsg = messages.firstWhere(
+    final globalPosMsg = messages.lastWhere(
       (msg) => msg.type == 'GLOBAL_POSITION_INT',
       orElse: () => MavlinkMessage(type: 'GLOBAL_POSITION_INT', data: {}),
     );
-    final vfrHudMsg = messages.firstWhere(
+    final vfrHudMsg = messages.lastWhere(
       (msg) => msg.type == 'VFR_HUD',
       orElse: () => MavlinkMessage(type: 'VFR_HUD', data: {}),
     );
-    final attitudeMsg = messages.firstWhere(
+    final attitudeMsg = messages.lastWhere(
       (msg) => msg.type == 'ATTITUDE',
       orElse: () => MavlinkMessage(type: 'ATTITUDE', data: {}),
     );
-    final sysStatusMsg2 = messages.firstWhere(
-      (msg) => msg.type == 'SYS_STATUS',
-      orElse: () => MavlinkMessage(type: 'SYS_STATUS', data: {}),
-    );
+
+    // Ambil data dari pesan
     double? lat = globalPosMsg.data['lat'] != null
         ? (globalPosMsg.data['lat'] as num).toDouble()
         : null;
@@ -218,17 +232,13 @@ class _HomepageState extends State<Homepage> {
     double? yaw = attitudeMsg.data['yaw'] != null
         ? (attitudeMsg.data['yaw'] as num).toDouble()
         : null;
-    double? barometers = sysStatusMsg2.data['barometers'] != null
-        ? (sysStatusMsg2.data['barometers'] as num).toDouble()
+    double? barometers = sysStatusMsg.data['barometers'] != null
+        ? (sysStatusMsg.data['barometers'] as num).toDouble()
         : null;
+    int? batteryRemaining = sysStatusMsg.data['battery_remaining'];
+    int? dropRate = sysStatusMsg.data['drop_rate_comm'];
 
     // For data in the navbar
-    int? batteryRemaining;
-    int? dropRate;
-    if (sysStatusMsg.data.isNotEmpty) {
-      batteryRemaining = sysStatusMsg.data['battery_remaining'];
-      dropRate = sysStatusMsg.data['drop_rate_comm'];
-    }
     return Scaffold(
       body: Stack(
         children: [
@@ -357,14 +367,14 @@ class _HomepageState extends State<Homepage> {
                           children: [
                             Expanded(
                                 child: Text(
-                                    alt != null
-                                        ? alt.toStringAsFixed(4)
-                                        : "0.0000",
+                                    alt != null && alt != 0.0
+                                        ? "${alt.toStringAsFixed(2)} m"
+                                        : "0.0",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
-                                    hdg != null
-                                        ? hdg.toStringAsFixed(1)
+                                    hdg != null && hdg != 0.0
+                                        ? "${hdg.toStringAsFixed(1)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                           ],
@@ -385,13 +395,13 @@ class _HomepageState extends State<Homepage> {
                             Expanded(
                                 child: Text(
                                     airspeed != null
-                                        ? airspeed.toStringAsFixed(4)
+                                        ? "${airspeed.toStringAsFixed(4)} m/s"
                                         : "0.0000",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
                                     groundspeed != null
-                                        ? groundspeed.toStringAsFixed(4)
+                                        ? "${groundspeed.toStringAsFixed(4)} m/s"
                                         : "0.0000",
                                     style: TextStyle(color: Colors.white))),
                           ],
@@ -412,13 +422,13 @@ class _HomepageState extends State<Homepage> {
                             Expanded(
                                 child: Text(
                                     pitch != null
-                                        ? pitch.toStringAsFixed(1)
+                                        ? "${pitch.toStringAsFixed(1)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
                                     roll != null
-                                        ? roll.toStringAsFixed(1)
+                                        ? "${roll.toStringAsFixed(1)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                           ],
@@ -439,13 +449,13 @@ class _HomepageState extends State<Homepage> {
                             Expanded(
                                 child: Text(
                                     yaw != null
-                                        ? yaw.toStringAsFixed(1)
+                                        ? "${yaw.toStringAsFixed(1)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
                                     barometers != null
-                                        ? barometers.toStringAsFixed(4)
+                                        ? "${barometers.toStringAsFixed(4)} hPa"
                                         : "0.0000",
                                     style: TextStyle(color: Colors.white))),
                           ],
@@ -462,15 +472,15 @@ class _HomepageState extends State<Homepage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _compas(),
+                _compas(hdg),
                 SizedBox(
                   height: 20,
                 ),
                 Row(
                   children: [
-                    _speedometer(),
+                    _speedometer(airspeed),
                     SizedBox(width: 20),
-                    _altitudeMeter(),
+                    _altitudeMeter(alt, roll, pitch),
                     SizedBox(width: 20),
                   ],
                 ),
@@ -478,15 +488,11 @@ class _HomepageState extends State<Homepage> {
             ),
           ),
           if (showAlert)
-            Positioned(
-              top: 80,
-              right: 20,
-              child: Alert(
-                color: alertColor,
-                title: alertTitle,
-                description: alertDescription,
-                onApply: _hideAlert,
-              ),
+            Alert(
+              color: alertColor,
+              title: alertTitle,
+              description: alertDescription,
+              onApply: _hideAlert,
             ),
           Positioned(
             left: 37,
@@ -625,7 +631,7 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  Widget _speedometer() {
+  Widget _speedometer(double? airspeed) {
     return SizedBox(
         width: 150,
         height: 150,
@@ -639,7 +645,7 @@ class _HomepageState extends State<Homepage> {
               maximum: 220,
               pointers: [
                 NeedlePointer(
-                  value: 60,
+                  value: airspeed ?? 0.0,
                   needleColor: Colors.red,
                   needleLength: 1,
                 ),
@@ -647,9 +653,9 @@ class _HomepageState extends State<Homepage> {
               annotations: [
                 GaugeAnnotation(
                   widget: Text(
-                    '60',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
+                      airspeed != null ? airspeed.toStringAsFixed(0) : "0",
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   angle: 90,
                   positionFactor: 0.5,
                 )
@@ -659,7 +665,7 @@ class _HomepageState extends State<Homepage> {
         )));
   }
 
-  Widget _compas() {
+  Widget _compas(hdg) {
     return ClipOval(
       child: Container(
         width: 100,
@@ -674,7 +680,7 @@ class _HomepageState extends State<Homepage> {
               fit: BoxFit.cover,
             ),
             Transform.rotate(
-              angle: (heading) * (3.141592653589793 / 180),
+              angle: (hdg ?? 0.0) * (3.141592653589793 / 180),
               child: Image.asset(
                 'assets/images/needle.png',
                 fit: BoxFit.cover,
@@ -686,7 +692,7 @@ class _HomepageState extends State<Homepage> {
     );
   }
 
-  Widget _altitudeMeter() {
+  Widget _altitudeMeter(alt, roll, pitch) {
     return Container(
         height: 150,
         padding: EdgeInsets.all(10),
@@ -698,16 +704,16 @@ class _HomepageState extends State<Homepage> {
           children: [
             // Altimeter Layer
             CustomPaint(
-              size: Size(150, 100),
-              painter: AltimeterPainter(altitude: 5),
-            ),
-            SizedBox(
-              width: 3,
+              size: Size(200, 100),
+              painter: AltimeterPainter(
+                  altitude:
+                      alt != null ? double.parse(alt.toStringAsFixed(0)) : 0.0),
             ),
             // Attitude Indicator Layer
             CustomPaint(
               size: Size(120, 120),
-              painter: AttitudeIndicatorPainter(roll: 15, pitch: 5),
+              painter: AttitudeIndicatorPainter(
+                  roll: roll ?? 0.0, pitch: pitch ?? 0.0),
             ),
           ],
         ));
