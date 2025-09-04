@@ -40,7 +40,7 @@ class Navbar extends StatelessWidget {
           Row(
             children: [
               SizedBox(width: 41),
-              Text("FALCONGCS",
+              Text("EFRISA",
                   style: GoogleFonts.fugazOne(
                       textStyle: TextStyle(color: Colors.white, fontSize: 20))),
               SizedBox(width: 29),
@@ -53,14 +53,14 @@ class Navbar extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 7),
-              ElevatedButton.icon(
-                onPressed: () {},
-                icon: Icon(Icons.add_location_alt_rounded, color: Colors.black),
-                label: Text("Plan", style: TextStyle(color: Colors.black)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                ),
-              ),
+              // ElevatedButton.icon(
+              //   onPressed: () {},
+              //   icon: Icon(Icons.add_location_alt_rounded, color: Colors.black),
+              //   label: Text("Plan", style: TextStyle(color: Colors.black)),
+              //   style: ElevatedButton.styleFrom(
+              //     backgroundColor: Colors.white,
+              //   ),
+              // ),
             ],
           ),
           Row(

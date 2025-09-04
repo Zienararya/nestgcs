@@ -9,6 +9,7 @@ import 'package:falcon_gcs/presentation/component/alert.dart';
 import 'package:falcon_gcs/presentation/component/navbar.dart';
 import 'package:falcon_gcs/presentation/component/altimeter.dart';
 import 'package:falcon_gcs/data/models/mavlink_message.dart';
+import 'dart:math' as math; // added for compass rotation
 
 class Homepage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -29,7 +30,6 @@ class _HomepageState extends State<Homepage> {
   late CameraController _cameraController;
   Future<void>? _initializeControllerFuture;
   final LatLng _center = const LatLng(-7.276716204463224, 112.79310750593704);
-  LatLng planePosition = const LatLng(-7.276716204463224, 112.79310750593704);
   String planePinLayerId = 'plane_pin';
   static const List<String> flightmode = <String>['Stabilize', 'Auto', 'RTL'];
   static String flightmodeValue = flightmode.first;
@@ -203,6 +203,10 @@ class _HomepageState extends State<Homepage> {
       (msg) => msg.type == 'ATTITUDE',
       orElse: () => MavlinkMessage(type: 'ATTITUDE', data: {}),
     );
+    final gpsRawMsg = messages.lastWhere(
+      (msg) => msg.type == 'GPS_RAW_INT',
+      orElse: () => MavlinkMessage(type: 'GPS_RAW_INT', data: {}),
+    );
 
     // Ambil data dari pesan
     double? lat = globalPosMsg.data['lat'] != null
@@ -223,6 +227,9 @@ class _HomepageState extends State<Homepage> {
     double? groundspeed = vfrHudMsg.data['groundspeed'] != null
         ? (vfrHudMsg.data['groundspeed'] as num).toDouble()
         : null;
+    double? compass = vfrHudMsg.data['heading'] != null
+        ? (vfrHudMsg.data['heading'] as num).toDouble()
+        : null;
     double? pitch = attitudeMsg.data['pitch'] != null
         ? (attitudeMsg.data['pitch'] as num).toDouble()
         : null;
@@ -235,9 +242,16 @@ class _HomepageState extends State<Homepage> {
     double? barometers = sysStatusMsg.data['barometers'] != null
         ? (sysStatusMsg.data['barometers'] as num).toDouble()
         : null;
+    // GPS RAW INT (HDOP & satellites)
+    int? satellitesVisible = gpsRawMsg.data['satellites_visible'];
+    double? eph = gpsRawMsg.data['eph'] != null
+        ? (gpsRawMsg.data['eph'] as num).toDouble()
+        : null; // HDOP scaled *100
+    double? hdop = eph != null ? eph / 100.0 : null;
     int? batteryRemaining = sysStatusMsg.data['battery_remaining'];
+    // print(batteryRemaining);
     int? dropRate = sysStatusMsg.data['drop_rate_comm'];
-
+    // print(dropRate);
     // For data in the navbar
     return Scaffold(
       body: Stack(
@@ -259,8 +273,8 @@ class _HomepageState extends State<Homepage> {
                 await controller.addGraphic(
                   layerId: planePinLayerId,
                   graphic: PointGraphic(
-                    latitude: planePosition.latitude,
-                    longitude: planePosition.longitude,
+                    latitude: lat ?? _center.latitude,
+                    longitude: lon ?? _center.longitude,
                     attributes: Attributes({'id': 'plane'}),
                     symbol: const PictureMarkerSymbol(
                       webUri:
@@ -325,15 +339,11 @@ class _HomepageState extends State<Homepage> {
                           children: [
                             Expanded(
                                 child: Text(
-                                    lon != null
-                                        ? lon.toStringAsFixed(4)
-                                        : "0.0000",
+                                    lon != null ? lon.toString() : "0.0000",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
-                                    lat != null
-                                        ? lat.toStringAsFixed(4)
-                                        : "0.0000",
+                                    lat != null ? lat.toString() : "0.0000",
                                     style: TextStyle(color: Colors.white))),
                           ],
                         )
@@ -368,7 +378,7 @@ class _HomepageState extends State<Homepage> {
                             Expanded(
                                 child: Text(
                                     alt != null && alt != 0.0
-                                        ? "${alt.toStringAsFixed(2)} m"
+                                        ? "${(alt / 1000).toString()} m"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
@@ -422,13 +432,13 @@ class _HomepageState extends State<Homepage> {
                             Expanded(
                                 child: Text(
                                     pitch != null
-                                        ? "${pitch.toStringAsFixed(1)}°"
+                                        ? "${(pitch * (180 / 3.141592653589793)).toStringAsFixed(2)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
                                     roll != null
-                                        ? "${roll.toStringAsFixed(1)}°"
+                                        ? "${(roll * (180 / 3.141592653589793)).toStringAsFixed(2)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                           ],
@@ -449,7 +459,7 @@ class _HomepageState extends State<Homepage> {
                             Expanded(
                                 child: Text(
                                     yaw != null
-                                        ? "${yaw.toStringAsFixed(1)}°"
+                                        ? "${(yaw * (180 / 3.141592653589793)).toStringAsFixed(2)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
@@ -472,7 +482,7 @@ class _HomepageState extends State<Homepage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _compas(hdg),
+                _compas(compass),
                 SizedBox(
                   height: 20,
                 ),
@@ -579,14 +589,14 @@ class _HomepageState extends State<Homepage> {
                   child: Row(
                     children: [
                       Text(
-                        "hdop 0.0",
+                        "hdop ${hdop != null ? hdop.toStringAsFixed(1) : '0.0'}",
                         style: TextStyle(color: Colors.white),
                       ),
                       SizedBox(
                         width: 30,
                       ),
                       Text(
-                        "sats 0",
+                        "sats ${satellitesVisible ?? 0}",
                         style: TextStyle(color: Colors.white),
                       )
                     ],
@@ -665,7 +675,10 @@ class _HomepageState extends State<Homepage> {
         )));
   }
 
-  Widget _compas(hdg) {
+  Widget _compas(compass) {
+    // compass value expected in degrees 0-360 (0 = North)
+    final double deg = ((compass ?? 0.0) as num).toDouble() % 360.0;
+    final double radians = deg * math.pi / 180.0; // correct conversion
     return ClipOval(
       child: Container(
         width: 100,
@@ -680,7 +693,7 @@ class _HomepageState extends State<Homepage> {
               fit: BoxFit.cover,
             ),
             Transform.rotate(
-              angle: (hdg ?? 0.0) * (3.141592653589793 / 180),
+              angle: radians,
               child: Image.asset(
                 'assets/images/needle.png',
                 fit: BoxFit.cover,
@@ -705,9 +718,8 @@ class _HomepageState extends State<Homepage> {
             // Altimeter Layer
             CustomPaint(
               size: Size(200, 100),
-              painter: AltimeterPainter(
-                  altitude:
-                      alt != null ? double.parse(alt.toStringAsFixed(0)) : 0.0),
+              painter:
+                  AltimeterPainter(altitude: alt != null ? alt / 1000 : 0.0),
             ),
             // Attitude Indicator Layer
             CustomPaint(

@@ -1,0 +1,1 @@
+/mnt/01D944B981A45790/linux/Downloads/project/krti/falcon_gcs/build/app/intermediates/cxx/Debug/4v5x2534/obj/arm64-v8a

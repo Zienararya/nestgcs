@@ -1,0 +1,1 @@
+/mnt/01D944B981A45790/linux/Downloads/project/krti/falcon_gcs/build/app/intermediates/cxx/RelWithDebInfo/6v37261z/obj/armeabi-v7a

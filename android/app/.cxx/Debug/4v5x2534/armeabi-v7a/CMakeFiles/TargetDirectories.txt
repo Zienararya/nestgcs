@@ -1,0 +1,2 @@
+/mnt/01D944B981A45790/linux/Downloads/project/krti/falcon_gcs/android/app/.cxx/Debug/4v5x2534/armeabi-v7a/CMakeFiles/edit_cache.dir
+/mnt/01D944B981A45790/linux/Downloads/project/krti/falcon_gcs/android/app/.cxx/Debug/4v5x2534/armeabi-v7a/CMakeFiles/rebuild_cache.dir
