@@ -19,7 +19,8 @@ dependencies:
   dart_mavlink: ^0.1.0
   socket_io_client: ^3.1.2
   provider: ^6.1.5
-  arcgis_map_sdk: ^0.8.0
+  flutter_map: ^8.2.1
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:

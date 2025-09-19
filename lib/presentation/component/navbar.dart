@@ -101,14 +101,27 @@ class Navbar extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 7),
-              ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(50),
                 ),
-                child: Text(
-                  "Stabilize",
-                  style: TextStyle(color: Colors.black),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: flightmodeValue,
+                    items: flightmode
+                        .map((m) => DropdownMenuItem<String>(
+                              value: m,
+                              child: Text(m,
+                                  style: const TextStyle(color: Colors.black)),
+                            ))
+                        .toList(),
+                    onChanged: onFlightmodeChanged,
+                    dropdownColor: Colors.white,
+                    iconEnabledColor: Colors.black,
+                    style: const TextStyle(color: Colors.black),
+                  ),
                 ),
               ),
             ],

@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:falcon_gcs/data/controllers/mavlink_controller.dart';
 import 'package:falcon_gcs/data/services/socket_service.dart';
-import 'package:arcgis_map_sdk/arcgis_map_sdk.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:falcon_gcs/presentation/component/alert.dart';
 import 'package:falcon_gcs/presentation/component/navbar.dart';
@@ -26,12 +27,32 @@ class _HomepageState extends State<Homepage> {
   // ======================
   //  State Variables
   // ======================
-  ArcgisMapController? mapController;
+  MapController? mapController;
+  double _currentZoom = 15.0;
   late CameraController _cameraController;
   Future<void>? _initializeControllerFuture;
   final LatLng _center = const LatLng(-7.276716204463224, 112.79310750593704);
   String planePinLayerId = 'plane_pin';
-  static const List<String> flightmode = <String>['Stabilize', 'Auto', 'RTL'];
+  // Supported modes (match backend map names, e.g., ArduCopter)
+  static const List<String> flightmode = <String>[
+    'STABILIZE',
+    'ALT_HOLD',
+    'LOITER',
+    'GUIDED',
+    'AUTO',
+    'RTL',
+    'CIRCLE',
+    'LAND',
+    'DRIFT',
+    'SPORT',
+    'FLIP',
+    'AUTOTUNE',
+    'POSHOLD',
+    'BRAKE',
+    'THROW',
+    'AVOID_ADSB',
+    'GUIDED_NOGPS',
+  ];
   static String flightmodeValue = flightmode.first;
   final TextEditingController ipAddress = TextEditingController();
   bool? isArming;
@@ -42,6 +63,18 @@ class _HomepageState extends State<Homepage> {
   late SocketService socketService;
   bool isConnected = false;
   bool showInfoPanel = false;
+  double? _lastLat;
+  double? _lastLon;
+  // Track history
+  final List<LatLng> _track = [];
+  final Distance _distance = const Distance();
+
+  // Helper aman untuk angka
+  T safeNum<T extends num>(dynamic v, T fallback) {
+    if (v == null) return fallback;
+    if (v is num && (v.isNaN || v.isInfinite)) return fallback;
+    return v as T;
+  }
 
   // ======================
   //  Lifecycle Methods
@@ -52,6 +85,7 @@ class _HomepageState extends State<Homepage> {
     super.initState();
     _initializeCamera();
     socketService = SocketService();
+    mapController = MapController();
   }
 
 // turn off camera
@@ -126,13 +160,51 @@ class _HomepageState extends State<Homepage> {
           isConnected = false;
         });
       },
+      onConnected: () {
+        if (!mounted) return;
+        setState(() {
+          alertColor = Colors.green;
+          alertTitle = "Connected";
+          alertDescription = "Connected to backend at $ip";
+          showAlert = true;
+          isConnected = true;
+        });
+      },
+      onDisconnected: (reason) {
+        if (!mounted) return;
+        setState(() {
+          alertColor = Colors.orange;
+          alertTitle = "Disconnected";
+          alertDescription = reason.isNotEmpty ? reason : "Connection lost";
+          showAlert = true;
+          isConnected = false;
+        });
+      },
+      onReconnecting: (attempt) {
+        if (!mounted) return;
+        setState(() {
+          alertColor = Colors.orange;
+          alertTitle = "Reconnecting";
+          alertDescription = "Attempt #$attempt";
+          showAlert = true;
+        });
+      },
+      onReconnected: (attempt) {
+        if (!mounted) return;
+        setState(() {
+          alertColor = Colors.green;
+          alertTitle = "Reconnected";
+          alertDescription = "Restored after $attempt attempts";
+          showAlert = true;
+          isConnected = true;
+        });
+      },
     );
     setState(() {
       alertColor = Colors.green;
       alertTitle = "Connecting";
       alertDescription = "Connecting to backend at $ip";
       showAlert = true;
-      isConnected = true;
     });
   }
 
@@ -170,11 +242,17 @@ class _HomepageState extends State<Homepage> {
   //  Map Zoom Functions
   // ======================
   void _zoomIn() {
-    mapController?.zoomIn(lodFactor: 5);
+    if (mapController != null) {
+      _currentZoom = (_currentZoom + 1).clamp(1.0, 19.0);
+      mapController!.move(mapController!.camera.center, _currentZoom);
+    }
   }
 
   void _zoomOut() {
-    mapController?.zoomOut(lodFactor: 5);
+    if (mapController != null) {
+      _currentZoom = (_currentZoom - 1).clamp(1.0, 19.0);
+      mapController!.move(mapController!.camera.center, _currentZoom);
+    }
   }
 
   // ======================
@@ -207,41 +285,59 @@ class _HomepageState extends State<Homepage> {
       (msg) => msg.type == 'GPS_RAW_INT',
       orElse: () => MavlinkMessage(type: 'GPS_RAW_INT', data: {}),
     );
+    final scaledPressMsg = messages.lastWhere(
+      (msg) => msg.type == 'SCALED_PRESSURE',
+      orElse: () => MavlinkMessage(type: 'SCALED_PRESSURE', data: {}),
+    );
 
     // Ambil data dari pesan
-    double? lat = globalPosMsg.data['lat'] != null
-        ? (globalPosMsg.data['lat'] as num).toDouble()
+    // GLOBAL_POSITION_INT lat/lon biasanya skala 1E7 (derajat * 1e7)
+    double? rawLat = globalPosMsg.data['lat'] != null
+        ? (globalPosMsg.data['lat'] as num).toDouble() / 1e7
         : null;
-    double? lon = globalPosMsg.data['lon'] != null
-        ? (globalPosMsg.data['lon'] as num).toDouble()
+    double? rawLon = globalPosMsg.data['lon'] != null
+        ? (globalPosMsg.data['lon'] as num).toDouble() / 1e7
         : null;
-    double? alt = globalPosMsg.data['alt'] != null
+    double? rawAlt = globalPosMsg.data['alt'] != null
         ? (globalPosMsg.data['alt'] as num).toDouble()
-        : null;
-    double? hdg = globalPosMsg.data['hdg'] != null
+        : null; // mm / cm tergantung frame, asumsi mm -> /1000 di display
+    double? rawHdg = globalPosMsg.data['hdg'] != null
         ? (globalPosMsg.data['hdg'] as num).toDouble()
-        : null;
-    double? airspeed = vfrHudMsg.data['airspeed'] != null
+        : null; // centi-deg? jika iya bisa /100, namun dibiarkan sesuai sebelumnya
+    double? rawAirspeed = vfrHudMsg.data['airspeed'] != null
         ? (vfrHudMsg.data['airspeed'] as num).toDouble()
         : null;
-    double? groundspeed = vfrHudMsg.data['groundspeed'] != null
+    double? rawGroundSpeed = vfrHudMsg.data['groundspeed'] != null
         ? (vfrHudMsg.data['groundspeed'] as num).toDouble()
         : null;
-    double? compass = vfrHudMsg.data['heading'] != null
+    double? rawCompass = vfrHudMsg.data['heading'] != null
         ? (vfrHudMsg.data['heading'] as num).toDouble()
         : null;
-    double? pitch = attitudeMsg.data['pitch'] != null
+    double? rawPitch = attitudeMsg.data['pitch'] != null
         ? (attitudeMsg.data['pitch'] as num).toDouble()
         : null;
-    double? roll = attitudeMsg.data['roll'] != null
+    double? rawRoll = attitudeMsg.data['roll'] != null
         ? (attitudeMsg.data['roll'] as num).toDouble()
         : null;
-    double? yaw = attitudeMsg.data['yaw'] != null
+    double? rawYaw = attitudeMsg.data['yaw'] != null
         ? (attitudeMsg.data['yaw'] as num).toDouble()
         : null;
-    double? barometers = sysStatusMsg.data['barometers'] != null
-        ? (sysStatusMsg.data['barometers'] as num).toDouble()
+    double? rawBarometers = scaledPressMsg.data['press_diff'] != null
+        ? (scaledPressMsg.data['press_diff'] as num).toDouble()
         : null;
+
+    // Normalisasi aman
+    final lat = safeNum<double>(rawLat, _center.latitude);
+    final lon = safeNum<double>(rawLon, _center.longitude);
+    final altMeters = safeNum<double>(rawAlt, 0.0) / 10000.0; // asumsi mm
+    final hdg = safeNum<double>(rawHdg, 0.0);
+    final airspeed = safeNum<double>(rawAirspeed, 0.0);
+    final groundspeed = safeNum<double>(rawGroundSpeed, 0.0);
+    final compass = safeNum<double>(rawCompass, 0.0) % 360.0;
+    final pitchDeg = safeNum<double>(rawPitch, 0.0) * 57.29577951308232;
+    final rollDeg = safeNum<double>(rawRoll, 0.0) * 57.29577951308232;
+    final yawDeg = safeNum<double>(rawYaw, 0.0) * 57.29577951308232;
+    final barometers = safeNum<double>(rawBarometers, 0.0);
     // GPS RAW INT (HDOP & satellites)
     int? satellitesVisible = gpsRawMsg.data['satellites_visible'];
     double? eph = gpsRawMsg.data['eph'] != null
@@ -250,43 +346,97 @@ class _HomepageState extends State<Homepage> {
     double? hdop = eph != null ? eph / 100.0 : null;
     int? batteryRemaining = sysStatusMsg.data['battery_remaining'];
     // print(batteryRemaining);
-    int? dropRate = sysStatusMsg.data['drop_rate_comm'];
-    // print(dropRate);
+  int? dropRate = sysStatusMsg.data['drop_rate_comm'];
+  // Konversi drop rate (0 = bagus) menjadi kualitas link (100 = bagus)
+  int? linkQuality = dropRate != null ? (100 - dropRate).clamp(0, 100) : null;
+  // print('raw dropRate=$dropRate linkQuality=$linkQuality');
     // For data in the navbar
+    // Auto-center jika koordinat berubah signifikan
+    if (mapController != null) {
+      if ((_lastLat != lat || _lastLon != lon) &&
+          lat.isFinite &&
+          lon.isFinite) {
+        _lastLat = lat;
+        _lastLon = lon;
+        // Hindari spam: hanya center jika zoom cukup besar atau pertama kali
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            mapController!.move(LatLng(lat, lon), _currentZoom);
+          }
+        });
+        // Tambah ke jejak lintasan (track) dengan threshold jarak agar tidak terlalu rapat
+        final currentPoint = LatLng(lat, lon);
+        if (_track.isEmpty) {
+          _track.add(currentPoint);
+        } else {
+          final last = _track.last;
+          // Jarak minimal 2 meter sebelum menambah titik baru
+          try {
+            final d = _distance(currentPoint, last);
+            if (d > 2) _track.add(currentPoint);
+          } catch (_) {
+            // fallback jika perhitungan gagal (jarang terjadi)
+            _track.add(currentPoint);
+          }
+          // Batasi panjang list (misal 5000 titik) untuk memori
+          if (_track.length > 5000) {
+            _track.removeRange(0, _track.length - 5000);
+          }
+        }
+      }
+    }
+
     return Scaffold(
       body: Stack(
         children: [
-          ArcgisMap(
-              apiKey:
-                  'AAPTxy8BH1VEsoebNVZXo8HurFv3YbHc2f0yfy3ERSqB087Dfchm7K26G4MpDjCSnjZcmrFeGnRFUv9TgeAfcI9YgdGIQW3Y6qgbwkXxGLG1njOTJ1X1j_JK4-U9387keeSPHhgi5875mk7BT9UVNYKZyZ5acTVanrTt9-PJ4rOELliIPYsS3NLt0JOkipD8iOrYhQkND_dY3i7XReUqDx0PETUzey9z4JpqVCfgUkZ4w3o.AT1_bvMnsjjI', // <-- Replace with your ArcGIS API key
+          FlutterMap(
+            mapController: mapController,
+            options: MapOptions(
               initialCenter: _center,
-              zoom: 15,
-              basemap: BaseMap.arcgisNavigationNight,
-              mapStyle: MapStyle.twoD,
-              onMapCreated: (controller) async {
-                mapController ??= controller;
-                // Create the graphics layer for the plane pin
-                await controller.addGraphicsLayer(
-                    layerId: planePinLayerId,
-                    options: GraphicsLayerOptions(fields: []));
-                // Add plane pin layer and pin
-                await controller.addGraphic(
-                  layerId: planePinLayerId,
-                  graphic: PointGraphic(
-                    latitude: lat ?? _center.latitude,
-                    longitude: lon ?? _center.longitude,
-                    attributes: Attributes({'id': 'plane'}),
-                    symbol: const PictureMarkerSymbol(
-                      webUri:
-                          "https://cdn-icons-png.flaticon.com/512/684/684908.png", // Use any plane icon you like
-                      mobileUri:
-                          "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+              initialZoom: _currentZoom,
+              onMapReady: () {
+                // Pastikan marker center pada awalnya
+                if (mapController != null) {
+                  mapController!.move(_center, _currentZoom);
+                }
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate:
+                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
+                userAgentPackageName: 'com.example.falcon_gcs',
+              ),
+              if (_track.length > 1)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _track,
+                      strokeWidth: 3,
+                      color: Colors.redAccent.withOpacity(0.8),
+                    ),
+                  ],
+                ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    width: 40,
+                    height: 40,
+                    point: LatLng(
+                      lat.isFinite ? lat : _center.latitude,
+                      lon.isFinite ? lon : _center.longitude,
+                    ),
+                    child: Image.network(
+                      'https://cdn-icons-png.flaticon.com/512/684/684908.png',
                       width: 40,
                       height: 40,
                     ),
                   ),
-                );
-              }),
+                ],
+              ),
+            ],
+          ),
           Positioned(
             top: 0,
             left: 0,
@@ -294,24 +444,70 @@ class _HomepageState extends State<Homepage> {
             child: Navbar(
               onConnect: connectToBackend,
               ipAddress: ipAddress,
-              flightmodeValue: flightmodeValue,
+              flightmodeValue:
+                  context.watch<MavlinkController>().currentMode.isNotEmpty
+                      ? context.watch<MavlinkController>().currentMode
+                      : flightmodeValue,
               flightmode: flightmode,
               onFlightmodeChanged: (String? value) {
+                if (value == null) return;
+                // Update local fallback
                 setState(() {
-                  flightmodeValue = value!;
+                  flightmodeValue = value;
                 });
+                // Send to backend
+                socketService.setMode(value);
               },
               isArming: isArming ?? false,
               onToggleArming: _toggleArming,
               batteryRemaining: batteryRemaining,
               connected: isConnected,
-              dropRate: dropRate,
+              dropRate: linkQuality,
               onDataPressed: toggleInfoPanel,
             ),
           ),
+          // Status banner for reconnecting / connected states
+          Consumer<MavlinkController>(
+            builder: (context, ctrl, _) {
+              if (ctrl.statusMode.isEmpty) return SizedBox.shrink();
+              Color c = Colors.blueAccent;
+              if (ctrl.statusMode == 'reconnecting') c = Colors.orange;
+              if (ctrl.statusMode == 'connected') c = Colors.green;
+              return Positioned(
+                top: 55,
+                left: 10,
+                right: 10,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: c.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        ctrl.statusMode == 'reconnecting'
+                            ? Icons.autorenew
+                            : Icons.check_circle,
+                        color: Colors.white,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          ctrl.statusMessage,
+                          style: TextStyle(color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
           if (showInfoPanel)
             Positioned(
-              top: 70,
+              top: 80,
               left: 40,
               child: Column(
                 children: [
@@ -338,12 +534,10 @@ class _HomepageState extends State<Homepage> {
                         Row(
                           children: [
                             Expanded(
-                                child: Text(
-                                    lon != null ? lon.toString() : "0.0000",
+                                child: Text(lon.toString(),
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
-                                child: Text(
-                                    lat != null ? lat.toString() : "0.0000",
+                                child: Text(lat.toString(),
                                     style: TextStyle(color: Colors.white))),
                           ],
                         )
@@ -377,13 +571,13 @@ class _HomepageState extends State<Homepage> {
                           children: [
                             Expanded(
                                 child: Text(
-                                    alt != null && alt != 0.0
-                                        ? "${(alt / 1000).toString()} m"
-                                        : "0.0",
+                                    altMeters != 0.0
+                                        ? "${altMeters.toStringAsFixed(2)} m"
+                                        : "0.00",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
-                                    hdg != null && hdg != 0.0
+                                    hdg != 0.0
                                         ? "${hdg.toStringAsFixed(1)}°"
                                         : "0.0",
                                     style: TextStyle(color: Colors.white))),
@@ -404,15 +598,11 @@ class _HomepageState extends State<Homepage> {
                           children: [
                             Expanded(
                                 child: Text(
-                                    airspeed != null
-                                        ? "${airspeed.toStringAsFixed(4)} m/s"
-                                        : "0.0000",
+                                    "${airspeed.toStringAsFixed(2)} m/s",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
-                                    groundspeed != null
-                                        ? "${groundspeed.toStringAsFixed(4)} m/s"
-                                        : "0.0000",
+                                    "${groundspeed.toStringAsFixed(2)} m/s",
                                     style: TextStyle(color: Colors.white))),
                           ],
                         ),
@@ -430,16 +620,10 @@ class _HomepageState extends State<Homepage> {
                         Row(
                           children: [
                             Expanded(
-                                child: Text(
-                                    pitch != null
-                                        ? "${(pitch * (180 / 3.141592653589793)).toStringAsFixed(2)}°"
-                                        : "0.0",
+                                child: Text("${pitchDeg.toStringAsFixed(2)}°",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
-                                child: Text(
-                                    roll != null
-                                        ? "${(roll * (180 / 3.141592653589793)).toStringAsFixed(2)}°"
-                                        : "0.0",
+                                child: Text("${rollDeg.toStringAsFixed(2)}°",
                                     style: TextStyle(color: Colors.white))),
                           ],
                         ),
@@ -457,16 +641,11 @@ class _HomepageState extends State<Homepage> {
                         Row(
                           children: [
                             Expanded(
-                                child: Text(
-                                    yaw != null
-                                        ? "${(yaw * (180 / 3.141592653589793)).toStringAsFixed(2)}°"
-                                        : "0.0",
+                                child: Text("${yawDeg.toStringAsFixed(2)}°",
                                     style: TextStyle(color: Colors.white))),
                             Expanded(
                                 child: Text(
-                                    barometers != null
-                                        ? "${barometers.toStringAsFixed(4)} hPa"
-                                        : "0.0000",
+                                    "${barometers.toStringAsFixed(2)} hPa",
                                     style: TextStyle(color: Colors.white))),
                           ],
                         ),
@@ -490,7 +669,7 @@ class _HomepageState extends State<Homepage> {
                   children: [
                     _speedometer(airspeed),
                     SizedBox(width: 20),
-                    _altitudeMeter(alt, roll, pitch),
+                    _altitudeMeter(altMeters, rollDeg, pitchDeg),
                     SizedBox(width: 20),
                   ],
                 ),
@@ -581,6 +760,26 @@ class _HomepageState extends State<Homepage> {
                   ],
                 ),
                 SizedBox(height: 17),
+                // Tombol clear track
+                ElevatedButton(
+                  onPressed: () => setState(() => _track.clear()),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.timeline, color: Colors.black, size: 16),
+                      SizedBox(width: 6),
+                      Text('Clear Track',
+                          style: TextStyle(color: Colors.black, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 9),
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
@@ -718,8 +917,7 @@ class _HomepageState extends State<Homepage> {
             // Altimeter Layer
             CustomPaint(
               size: Size(200, 100),
-              painter:
-                  AltimeterPainter(altitude: alt != null ? alt / 1000 : 0.0),
+              painter: AltimeterPainter(altitude: alt ?? 0.0),
             ),
             // Attitude Indicator Layer
             CustomPaint(
