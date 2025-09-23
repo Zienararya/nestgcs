@@ -163,4 +163,12 @@ class SocketService {
   void dispose() {
     _socket?.dispose();
   }
+
+  void calibrateLevel() {
+    final s = _socket;
+    if (s == null) return;
+    try {
+      s.emit('calibrate_level', {});
+    } catch (_) {}
+  }
 }

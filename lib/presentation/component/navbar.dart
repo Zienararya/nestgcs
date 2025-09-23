@@ -13,6 +13,7 @@ class Navbar extends StatelessWidget {
   final int? batteryRemaining;
   final int? dropRate;
   final bool connected;
+  final VoidCallback? onCalibrateLevel;
 
   const Navbar(
       {super.key,
@@ -26,7 +27,8 @@ class Navbar extends StatelessWidget {
       required this.batteryRemaining,
       required this.dropRate,
       required this.connected,
-      required this.onDataPressed});
+      required this.onDataPressed,
+      this.onCalibrateLevel});
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +54,17 @@ class Navbar extends StatelessWidget {
                   backgroundColor: Colors.white,
                 ),
               ),
+              SizedBox(width: 7),
+              if (onCalibrateLevel != null)
+                ElevatedButton.icon(
+                  onPressed: onCalibrateLevel,
+                  icon: Icon(Icons.screen_rotation_alt, color: Colors.black),
+                  label: Text("Calibrate Level",
+                      style: TextStyle(color: Colors.black)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                  ),
+                ),
               SizedBox(width: 7),
               // ElevatedButton.icon(
               //   onPressed: () {},

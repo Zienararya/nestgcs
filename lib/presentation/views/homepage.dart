@@ -69,6 +69,8 @@ class _HomepageState extends State<Homepage> {
   // Track history
   final List<LatLng> _track = [];
   final Distance _distance = const Distance();
+  // Track last shown status message to avoid duplicate alerts
+  String _lastStatusMessage = '';
 
   // Helper aman untuk angka
   T safeNum<T extends num>(dynamic v, T fallback) {
@@ -221,6 +223,19 @@ class _HomepageState extends State<Homepage> {
       alertTitle = target ? 'Arming...' : 'Disarming...';
       alertDescription =
           target ? 'Mengirim perintah ARM' : 'Mengirim perintah DISARM';
+      showAlert = true;
+    });
+  }
+
+  // ======================
+  //  Calibration Button
+  // ======================
+  void _calibrateLevel() {
+    socketService.calibrateLevel();
+    setState(() {
+      alertColor = Colors.orange;
+      alertTitle = 'Kalibrasi';
+      alertDescription = 'Mengirim perintah kalibrasi level...';
       showAlert = true;
     });
   }
@@ -383,6 +398,38 @@ class _HomepageState extends State<Homepage> {
       }
     }
 
+    // Show alert automatically when a new calibration related status arrives
+    if (mavlinkController.statusMessage != _lastStatusMessage) {
+      final msg = mavlinkController.statusMessage;
+      // Only show for calibration related messages
+      if (msg.toLowerCase().contains('kalibrasi')) {
+        Color c = Colors.blueGrey;
+        switch (mavlinkController.statusMode.toLowerCase()) {
+          case 'ok':
+            c = Colors.green;
+            break;
+          case 'error':
+            c = Colors.red;
+            break;
+          case 'info':
+            c = Colors.orange;
+            break;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            alertColor = c;
+            alertTitle = 'Kalibrasi';
+            alertDescription = msg;
+            showAlert = true;
+            _lastStatusMessage = msg;
+          });
+        });
+      } else {
+        _lastStatusMessage = msg; // update silently for other messages
+      }
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -461,6 +508,7 @@ class _HomepageState extends State<Homepage> {
               connected: isConnected,
               dropRate: linkQuality,
               onDataPressed: toggleInfoPanel,
+              onCalibrateLevel: _calibrateLevel,
             ),
           ),
           if (showInfoPanel)
