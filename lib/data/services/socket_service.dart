@@ -107,6 +107,18 @@ class SocketService {
       } catch (_) {}
     });
 
+    // Listen for arming state updates from backend heartbeat or command ack
+    _socket!.on('arming_update', (data) {
+      try {
+        if (data is Map && data['armed'] is bool) {
+          controller.setArmed(data['armed'] as bool);
+          log('Arming update received: ${data['armed']}');
+        }
+      } catch (e) {
+        log('Error parsing arming_update: $e data=$data');
+      }
+    });
+
     _socket!.onAny((event, data) {
       // Debug hook if needed
     });
@@ -128,6 +140,14 @@ class SocketService {
     if (s == null) return;
     try {
       s.emit('set_mode', {'mode': modeName});
+    } catch (_) {}
+  }
+
+  void setArming(bool arm) {
+    final s = _socket;
+    if (s == null) return;
+    try {
+      s.emit('set_arming', {'arm': arm});
     } catch (_) {}
   }
 

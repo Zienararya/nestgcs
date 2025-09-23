@@ -6,11 +6,13 @@ class MavlinkController extends ChangeNotifier {
   String _statusMode = '';
   String _statusMessage = '';
   String _currentMode = '';
+  bool _armed = false;
 
   List<MavlinkMessage> get messages => _messages;
   String get statusMode => _statusMode;
   String get statusMessage => _statusMessage;
   String get currentMode => _currentMode;
+  bool get armed => _armed;
 
   void addMessage(MavlinkMessage message) {
     // Hapus pesan lama dengan tipe yang sama
@@ -34,5 +36,12 @@ class MavlinkController extends ChangeNotifier {
   void setCurrentMode(String mode) {
     _currentMode = mode;
     notifyListeners();
+  }
+
+  void setArmed(bool value) {
+    if (_armed != value) {
+      _armed = value;
+      notifyListeners();
+    }
   }
 }

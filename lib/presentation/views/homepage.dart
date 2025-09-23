@@ -212,18 +212,14 @@ class _HomepageState extends State<Homepage> {
   //  Arming/Disarm Button
   // ======================
   void _toggleArming() {
+    final controller = Provider.of<MavlinkController>(context, listen: false);
+    final target = !(controller.armed);
+    socketService.setArming(target);
     setState(() {
-      isArming = !(isArming ?? false);
-      if (isArming == true) {
-        alertColor = Colors.red;
-        alertTitle = "Armed";
-        alertDescription = "warning, the plane is arming";
-      } else {
-        alertColor = Colors.green;
-        alertTitle = "Disarmed";
-        alertDescription = "the plane is disarming";
-      }
-      _initializeCamera();
+      alertColor = target ? Colors.red : Colors.green;
+      alertTitle = target ? 'Arming...' : 'Disarming...';
+      alertDescription =
+          target ? 'Mengirim perintah ARM' : 'Mengirim perintah DISARM';
       showAlert = true;
     });
   }
@@ -346,10 +342,10 @@ class _HomepageState extends State<Homepage> {
     double? hdop = eph != null ? eph / 100.0 : null;
     int? batteryRemaining = sysStatusMsg.data['battery_remaining'];
     // print(batteryRemaining);
-  int? dropRate = sysStatusMsg.data['drop_rate_comm'];
-  // Konversi drop rate (0 = bagus) menjadi kualitas link (100 = bagus)
-  int? linkQuality = dropRate != null ? (100 - dropRate).clamp(0, 100) : null;
-  // print('raw dropRate=$dropRate linkQuality=$linkQuality');
+    int? dropRate = sysStatusMsg.data['drop_rate_comm'];
+    // Konversi drop rate (0 = bagus) menjadi kualitas link (100 = bagus)
+    int? linkQuality = dropRate != null ? (100 - dropRate).clamp(0, 100) : null;
+    // print('raw dropRate=$dropRate linkQuality=$linkQuality');
     // For data in the navbar
     // Auto-center jika koordinat berubah signifikan
     if (mapController != null) {
@@ -458,52 +454,13 @@ class _HomepageState extends State<Homepage> {
                 // Send to backend
                 socketService.setMode(value);
               },
-              isArming: isArming ?? false,
+              isArming: context.watch<MavlinkController>().armed,
               onToggleArming: _toggleArming,
               batteryRemaining: batteryRemaining,
               connected: isConnected,
               dropRate: linkQuality,
               onDataPressed: toggleInfoPanel,
             ),
-          ),
-          // Status banner for reconnecting / connected states
-          Consumer<MavlinkController>(
-            builder: (context, ctrl, _) {
-              if (ctrl.statusMode.isEmpty) return SizedBox.shrink();
-              Color c = Colors.blueAccent;
-              if (ctrl.statusMode == 'reconnecting') c = Colors.orange;
-              if (ctrl.statusMode == 'connected') c = Colors.green;
-              return Positioned(
-                top: 55,
-                left: 10,
-                right: 10,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: c.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        ctrl.statusMode == 'reconnecting'
-                            ? Icons.autorenew
-                            : Icons.check_circle,
-                        color: Colors.white,
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          ctrl.statusMessage,
-                          style: TextStyle(color: Colors.white),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
           ),
           if (showInfoPanel)
             Positioned(
@@ -883,8 +840,7 @@ class _HomepageState extends State<Homepage> {
         width: 100,
         height: 100,
         color: Colors.white,
-        child: SizedBox(
-            child: Stack(
+        child: Stack(
           alignment: Alignment.center,
           children: [
             Image.asset(
@@ -899,7 +855,7 @@ class _HomepageState extends State<Homepage> {
               ),
             ),
           ],
-        )),
+        ),
       ),
     );
   }
