@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'dart:ui'; // for FontFeature
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:falcon_gcs/data/controllers/mavlink_controller.dart';
@@ -770,24 +771,43 @@ class _HomepageState extends State<Homepage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 147,
-                    padding: EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(50)),
-                    child: Column(
-                      children: [
-                        Text(
-                          "FLIGHT TIME",
-                          style: TextStyle(color: Colors.white, fontSize: 8),
-                        ),
-                        Text("00:00:00",
-                            style:
-                                TextStyle(color: Colors.white, fontSize: 20)),
-                      ],
-                    ),
-                  )
+                  Builder(builder: (context) {
+                    final mav = context.watch<MavlinkController>();
+                    Duration ft = mav.flightTime;
+                    String two(int v) => v.toString().padLeft(2, '0');
+                    final h = ft.inHours;
+                    final m = ft.inMinutes.remainder(60);
+                    final s = ft.inSeconds.remainder(60);
+                    final formatted = h > 0
+                        ? '${two(h)}:${two(m)}:${two(s)}'
+                        : '${two(m)}:${two(s)}';
+                    return Container(
+                      width: 147,
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: mav.armed
+                            ? Colors.redAccent.withOpacity(0.65)
+                            : Colors.black54,
+                        borderRadius: BorderRadius.circular(50),
+                        border: Border.all(color: Colors.white24, width: 1),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'FLIGHT TIME',
+                            style: TextStyle(color: Colors.white, fontSize: 8),
+                          ),
+                          Text(
+                            formatted,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontFeatures: [FontFeature.tabularFigures()]),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),

@@ -76,6 +76,15 @@ class SocketService {
         final message =
             MavlinkMessage.fromJson(Map<String, dynamic>.from(data));
         controller.addMessage(message);
+        // Capture SYSTEM_TIME to drive flight time
+        if (message.type == 'SYSTEM_TIME') {
+          final tb = message.data['time_boot_ms'];
+          if (tb is int) {
+            controller.setTimeBootMs(tb);
+          } else if (tb is num) {
+            controller.setTimeBootMs(tb.toInt());
+          }
+        }
       } catch (e) {
         log('Parse mavlink_data error: $e data=$data');
       }
