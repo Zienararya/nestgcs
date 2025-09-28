@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'dart:async'; // for Timer debug panel refresh
 import 'dart:ui'; // for FontFeature
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -77,6 +78,7 @@ class _HomepageState extends State<Homepage> {
   final Distance _distance = const Distance();
   // Track last shown status message to avoid duplicate alerts
   String _lastStatusMessage = '';
+  Timer? _debugTimer; // periodic UI refresh for debug stats
 
   // Helper aman untuk angka
   T safeNum<T extends num>(dynamic v, T fallback) {
@@ -98,11 +100,17 @@ class _HomepageState extends State<Homepage> {
         Provider.of<MavlinkController>(context, listen: false));
     _refreshDevices();
     mapController = MapController();
+    // Periodically refresh UI so debug stats update while connected
+    _debugTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      if (isConnected) setState(() {});
+    });
   }
 
 // turn off camera
   @override
   void dispose() {
+    _debugTimer?.cancel();
     _cameraController.dispose();
     super.dispose();
   }
@@ -338,7 +346,8 @@ class _HomepageState extends State<Homepage> {
     // Normalisasi aman
     final lat = safeNum<double>(rawLat, _center.latitude);
     final lon = safeNum<double>(rawLon, _center.longitude);
-    final altMeters = safeNum<double>(rawAlt, 0.0) / 10000.0; // asumsi mm
+    // GLOBAL_POSITION_INT.alt adalah altitude AMSL dalam milimeter (MAVLink common) -> konversi ke meter /1000
+    final altMeters = safeNum<double>(rawAlt, 0.0) / 1000.0;
     final hdg = safeNum<double>(rawHdg, 0.0);
     final airspeed = safeNum<double>(rawAirspeed, 0.0);
     final groundspeed = safeNum<double>(rawGroundSpeed, 0.0);
@@ -521,7 +530,7 @@ class _HomepageState extends State<Homepage> {
           ),
           if (showInfoPanel)
             Positioned(
-              top: 80,
+              top: 90,
               left: 40,
               child: Column(
                 children: [
