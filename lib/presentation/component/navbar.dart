@@ -5,30 +5,37 @@ class Navbar extends StatelessWidget {
   final String flightmodeValue;
   final List<String> flightmode;
   final ValueChanged<String?> onFlightmodeChanged;
-  final TextEditingController ipAddress;
-  final VoidCallback onConnect;
   final bool isArming;
   final VoidCallback onToggleArming;
   final VoidCallback onDataPressed;
   final int? batteryRemaining;
   final int? dropRate;
   final bool connected;
+  final VoidCallback onConnect;
+  final List<String> serialDevices; // list of device names/ids
+  final String? selectedDevice;
+  final ValueChanged<String?> onDeviceChanged;
+  final VoidCallback onRefreshDevices;
   final VoidCallback? onCalibrateLevel;
 
-  const Navbar(
-      {super.key,
-      required this.flightmodeValue,
-      required this.flightmode,
-      required this.onFlightmodeChanged,
-      required this.ipAddress,
-      required this.onConnect,
-      required this.isArming,
-      required this.onToggleArming,
-      required this.batteryRemaining,
-      required this.dropRate,
-      required this.connected,
-      required this.onDataPressed,
-      this.onCalibrateLevel});
+  const Navbar({
+    super.key,
+    required this.flightmodeValue,
+    required this.flightmode,
+    required this.onFlightmodeChanged,
+    required this.onConnect,
+    required this.isArming,
+    required this.onToggleArming,
+    required this.batteryRemaining,
+    required this.dropRate,
+    required this.connected,
+    required this.onDataPressed,
+    required this.serialDevices,
+    required this.selectedDevice,
+    required this.onDeviceChanged,
+    required this.onRefreshDevices,
+    this.onCalibrateLevel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -141,30 +148,53 @@ class Navbar extends StatelessWidget {
           ),
           Row(
             children: [
-              SizedBox(
-                width: 150,
-                child: TextField(
-                  controller: ipAddress,
-                  decoration: InputDecoration(
-                    hintText: 'IP Address',
-                    fillColor: Colors.white,
-                    filled: true,
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  ),
-                  style: TextStyle(fontSize: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedDevice,
+                        hint: const Text('Select Device',
+                            style: TextStyle(color: Colors.black54)),
+                        items: serialDevices.map((d) {
+                          final display =
+                              d.length > 20 ? d.substring(0, 18) + '...' : d;
+                          return DropdownMenuItem<String>(
+                            value: d,
+                            child: Text(display,
+                                style: const TextStyle(color: Colors.black)),
+                          );
+                        }).toList(),
+                        onChanged: onDeviceChanged,
+                        dropdownColor: Colors.white,
+                        iconEnabledColor: Colors.black,
+                        style: const TextStyle(color: Colors.black),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Refresh',
+                      icon: const Icon(Icons.refresh, color: Colors.black87),
+                      onPressed: onRefreshDevices,
+                    )
+                  ],
                 ),
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               ElevatedButton.icon(
                   onPressed: onConnect,
-                  icon: Icon(Icons.link_rounded, color: Colors.black),
+                  icon: Icon(
+                      connected ? Icons.usb_off_rounded : Icons.usb_rounded,
+                      color: Colors.black),
                   label: Text(connected ? "DISCONNECT" : "CONNECT",
-                      style: TextStyle(color: Colors.black)),
+                      style: const TextStyle(color: Colors.black)),
                   style: ButtonStyle(
                       backgroundColor: WidgetStateProperty.all(Colors.white))),
-              SizedBox(width: 28),
+              const SizedBox(width: 28),
             ],
           ),
         ],

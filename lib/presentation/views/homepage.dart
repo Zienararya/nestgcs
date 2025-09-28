@@ -3,7 +3,9 @@ import 'dart:ui'; // for FontFeature
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:falcon_gcs/data/controllers/mavlink_controller.dart';
-import 'package:falcon_gcs/data/services/socket_service.dart';
+// import 'package:falcon_gcs/data/services/socket_service.dart'; // Removed: switch to serial telemetry
+import 'package:falcon_gcs/data/services/serial_telemetry_source.dart';
+import 'package:usb_serial/usb_serial.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
@@ -55,13 +57,17 @@ class _HomepageState extends State<Homepage> {
     'GUIDED_NOGPS',
   ];
   static String flightmodeValue = flightmode.first;
-  final TextEditingController ipAddress = TextEditingController();
+  // Serial device list & selection
+  List<UsbDevice> _devices = [];
+  List<String> _deviceNames = [];
+  UsbDevice? _selectedDevice;
+  SerialTelemetrySource? _serial;
   bool? isArming;
   bool showAlert = false;
   Color alertColor = Colors.red;
   String alertTitle = "";
   String alertDescription = "";
-  late SocketService socketService;
+  // late SocketService socketService; // deprecated
   bool isConnected = false;
   bool showInfoPanel = false;
   double? _lastLat;
@@ -87,7 +93,10 @@ class _HomepageState extends State<Homepage> {
   void initState() {
     super.initState();
     _initializeCamera();
-    socketService = SocketService();
+    // socketService = SocketService(); // removed in serial version
+    _serial = SerialTelemetrySource(
+        Provider.of<MavlinkController>(context, listen: false));
+    _refreshDevices();
     mapController = MapController();
   }
 
@@ -124,89 +133,77 @@ class _HomepageState extends State<Homepage> {
   }
 
   // ======================
-  //  Backend Connection
+  //  Serial Devices & Connection
   // ======================
-  void connectToBackend() {
-    final controller = Provider.of<MavlinkController>(context, listen: false);
-    final ip = ipAddress.text.trim();
+  Future<void> _refreshDevices() async {
+    try {
+      final devices = await UsbSerial.listDevices();
+      setState(() {
+        _devices = devices;
+        _deviceNames = devices
+            .map((d) => (d.productName ?? 'USB') + ' (${d.deviceId})')
+            .toList();
+        if (_selectedDevice != null) {
+          final match =
+              devices.where((e) => e.deviceId == _selectedDevice!.deviceId);
+          if (match.isNotEmpty) {
+            _selectedDevice = match.first;
+          } else if (devices.isNotEmpty) {
+            _selectedDevice = devices.first;
+          } else {
+            _selectedDevice = null;
+          }
+        } else if (devices.isNotEmpty) {
+          _selectedDevice = devices.first;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        alertColor = Colors.red;
+        alertTitle = 'Device Error';
+        alertDescription = e.toString();
+        showAlert = true;
+      });
+    }
+  }
 
+  void _toggleSerialConnection() async {
     if (isConnected) {
-      socketService.dispose();
+      await _serial?.stop();
       setState(() {
         isConnected = false;
         alertColor = Colors.orange;
-        alertTitle = "Disconnected";
-        alertDescription = "Disconnected from backend.";
+        alertTitle = 'Disconnected';
+        alertDescription = 'Serial link closed';
         showAlert = true;
       });
       return;
     }
-
-    if (ip.isEmpty) {
+    if (_selectedDevice == null) {
       setState(() {
         alertColor = Colors.red;
-        alertTitle = "Error";
-        alertDescription = "IP Address cannot be empty!";
+        alertTitle = 'No Device';
+        alertDescription = 'Pilih perangkat USB terlebih dahulu';
         showAlert = true;
       });
       return;
     }
-    socketService.initSocket(
-      controller,
-      backendIP: ip,
-      onError: (error) {
-        setState(() {
-          alertColor = Colors.red;
-          alertTitle = "Connection Failed";
-          alertDescription = error;
-          showAlert = true;
-          isConnected = false;
-        });
-      },
-      onConnected: () {
-        if (!mounted) return;
-        setState(() {
-          alertColor = Colors.green;
-          alertTitle = "Connected";
-          alertDescription = "Connected to backend at $ip";
-          showAlert = true;
-          isConnected = true;
-        });
-      },
-      onDisconnected: (reason) {
-        if (!mounted) return;
-        setState(() {
-          alertColor = Colors.orange;
-          alertTitle = "Disconnected";
-          alertDescription = reason.isNotEmpty ? reason : "Connection lost";
-          showAlert = true;
-          isConnected = false;
-        });
-      },
-      onReconnecting: (attempt) {
-        if (!mounted) return;
-        setState(() {
-          alertColor = Colors.orange;
-          alertTitle = "Reconnecting";
-          alertDescription = "Attempt #$attempt";
-          showAlert = true;
-        });
-      },
-      onReconnected: (attempt) {
-        if (!mounted) return;
-        setState(() {
-          alertColor = Colors.green;
-          alertTitle = "Reconnected";
-          alertDescription = "Restored after $attempt attempts";
-          showAlert = true;
-          isConnected = true;
-        });
-      },
-    );
     setState(() {
       alertColor = Colors.green;
-      alertTitle = "Connecting";
-      alertDescription = "Connecting to backend at $ip";
+      alertTitle = 'Connecting';
+      final devLabel =
+          _selectedDevice!.productName ?? _selectedDevice!.deviceId.toString();
+      alertDescription = 'Opening serial ' + devLabel.toString();
+      showAlert = true;
+    });
+    final ok = await _serial!.start(selectedDevice: _selectedDevice);
+    if (!mounted) return;
+    setState(() {
+      isConnected = ok;
+      alertColor = ok ? Colors.green : Colors.red;
+      alertTitle = ok ? 'Connected' : 'Failed';
+      alertDescription =
+          ok ? 'Serial connected.' : 'Gagal membuka perangkat serial.';
       showAlert = true;
     });
   }
@@ -215,9 +212,9 @@ class _HomepageState extends State<Homepage> {
   //  Arming/Disarm Button
   // ======================
   void _toggleArming() {
-    final controller = Provider.of<MavlinkController>(context, listen: false);
-    final target = !(controller.armed);
-    socketService.setArming(target);
+    final target =
+        !Provider.of<MavlinkController>(context, listen: false).armed;
+    _serial?.armDisarm(target);
     setState(() {
       alertColor = target ? Colors.red : Colors.green;
       alertTitle = target ? 'Arming...' : 'Disarming...';
@@ -231,7 +228,7 @@ class _HomepageState extends State<Homepage> {
   //  Calibration Button
   // ======================
   void _calibrateLevel() {
-    socketService.calibrateLevel();
+    _serial?.calibrateLevel();
     setState(() {
       alertColor = Colors.orange;
       alertTitle = 'Kalibrasi';
@@ -362,6 +359,7 @@ class _HomepageState extends State<Homepage> {
     // Konversi drop rate (0 = bagus) menjadi kualitas link (100 = bagus)
     int? linkQuality = dropRate != null ? (100 - dropRate).clamp(0, 100) : null;
     // print('raw dropRate=$dropRate linkQuality=$linkQuality');
+    // int? dropRate = sysStatusMsg.data['drop_rate_comm']; // legacy (socket based)
     // For data in the navbar
     // Auto-center jika koordinat berubah signifikan
     if (mapController != null) {
@@ -486,8 +484,18 @@ class _HomepageState extends State<Homepage> {
             left: 0,
             right: 0,
             child: Navbar(
-              onConnect: connectToBackend,
-              ipAddress: ipAddress,
+              onConnect: _toggleSerialConnection,
+              serialDevices: _deviceNames,
+              selectedDevice: _selectedDevice != null
+                  ? (_selectedDevice!.productName ?? 'USB') +
+                      ' (${_selectedDevice!.deviceId})'
+                  : null,
+              onDeviceChanged: (val) {
+                if (val == null) return;
+                final idx = _deviceNames.indexOf(val);
+                if (idx >= 0) setState(() => _selectedDevice = _devices[idx]);
+              },
+              onRefreshDevices: _refreshDevices,
               flightmodeValue:
                   context.watch<MavlinkController>().currentMode.isNotEmpty
                       ? context.watch<MavlinkController>().currentMode
@@ -499,16 +507,16 @@ class _HomepageState extends State<Homepage> {
                 setState(() {
                   flightmodeValue = value;
                 });
-                // Send to backend
-                socketService.setMode(value);
+                // Send via serial
+                _serial?.setMode(value);
               },
               isArming: context.watch<MavlinkController>().armed,
               onToggleArming: _toggleArming,
               batteryRemaining: batteryRemaining,
               connected: isConnected,
-              dropRate: linkQuality,
               onDataPressed: toggleInfoPanel,
               onCalibrateLevel: _calibrateLevel,
+              dropRate: linkQuality,
             ),
           ),
           if (showInfoPanel)
